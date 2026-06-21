@@ -4,7 +4,7 @@ Bronze Layer — Raw Ingestion via Databricks Lakeflow Declarative Pipelines (DL
 All sources ingested as-is. No transformations. Append-only Delta tables.
 
 Run as a Databricks Lakeflow pipeline:
-  Catalog: renewiq | Schema: bronze
+  Catalog: renewiq | Schema: bronze  (schema-qualified per table)
 """
 
 import dlt
@@ -12,17 +12,13 @@ from pyspark.sql import functions as F
 from pyspark.sql.types import StringType, TimestampType, DateType, LongType
 
 # ── Storage paths ─────────────────────────────────────────────────────────────
-# Dev: Unity Catalog Volume (works when DBFS root is disabled — UC-enforced workspaces)
-#   /Volumes/<catalog>/<schema>/<volume>/
-# Prod override: set renewiq.storage_root in pipeline config to your ADLS path
-#   e.g. abfss://raw@<storage_account>.dfs.core.windows.net
 STORAGE_ROOT = spark.conf.get("renewiq.storage_root", "/Volumes/renewiq/bronze/raw_data")
 
 
 # ── EPEX Day-Ahead Prices ─────────────────────────────────────────────────────
 
 @dlt.table(
-    name="epex_dayahead_raw",
+    name="bronze.epex_dayahead_raw",
     comment="Raw EPEX NL day-ahead hourly prices from ENTSO-E Transparency — append-only",
     table_properties={
         "quality": "bronze",
@@ -30,11 +26,6 @@ STORAGE_ROOT = spark.conf.get("renewiq.storage_root", "/Volumes/renewiq/bronze/r
     },
 )
 def ingest_epex_raw():
-    """
-    Auto Loader picks up JSON files dropped by seed_market_data.py
-    or the daily scheduler job.
-    Schema: {ingestion_ts, source_api, market, fetch_date, raw_payload}
-    """
     return (
         spark.readStream
         .format("cloudFiles")
@@ -50,7 +41,7 @@ def ingest_epex_raw():
 # ── ENTSO-E Generation Mix ────────────────────────────────────────────────────
 
 @dlt.table(
-    name="entso_generation_raw",
+    name="bronze.entso_generation_raw",
     comment="Raw ENTSO-E actual generation per production type — append-only",
     table_properties={"quality": "bronze"},
 )
@@ -70,7 +61,7 @@ def ingest_entso_raw():
 # ── GOPACS Congestion Announcements ───────────────────────────────────────────
 
 @dlt.table(
-    name="gopacs_announcements_raw",
+    name="bronze.gopacs_announcements_raw",
     comment="Raw GOPACS grid congestion market announcements — append-only",
     table_properties={"quality": "bronze"},
 )
@@ -90,15 +81,11 @@ def ingest_gopacs_raw():
 # ── PPA Contract Documents ────────────────────────────────────────────────────
 
 @dlt.table(
-    name="ppa_documents_raw",
+    name="bronze.ppa_documents_raw",
     comment="Raw PPA PDF binary metadata — content extracted in Silver layer",
     table_properties={"quality": "bronze"},
 )
 def ingest_ppa_docs():
-    """
-    Auto Loader monitors the UC Volume contracts folder for new PDF uploads.
-    Stores file metadata only — actual content extracted by Silver pipeline.
-    """
     return (
         spark.readStream
         .format("cloudFiles")

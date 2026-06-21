@@ -4,7 +4,7 @@ Gold Layer — Agent-Ready Feature Tables
 Pre-computed, denormalised datasets optimised for agent queries.
 Agents read from Gold via Unity Catalog SQL/Python tools — never from Silver directly.
 
-  Catalog: renewiq | Schema: gold
+  Catalog: renewiq | Schema: gold  (schema-qualified per table)
 """
 
 import dlt
@@ -14,7 +14,7 @@ from pyspark.sql import functions as F, Window
 # ── market_risk_signals ───────────────────────────────────────────────────────
 
 @dlt.table(
-    name="market_risk_signals",
+    name="gold.market_risk_signals",
     comment=(
         "Pre-computed market stress signals: negative price windows, "
         "GOPACS congestion events, renewable oversupply flags. "
@@ -23,16 +23,12 @@ from pyspark.sql import functions as F, Window
     table_properties={"quality": "gold"},
 )
 def compute_market_risk_signals():
-    """
-    Joins EPEX prices, ENTSO-E generation, and GOPACS congestion into
-    a single market stress signal per hour. Agents query this table to answer
-    'what is the market context right now?' without touching raw sources.
-    """
-    epex   = dlt.read("epex_dayahead")
-    entso  = dlt.read("entso_generation")
-    gopacs = dlt.read("gopacs_congestion_events")
+    epex   = dlt.read("silver.epex_dayahead")
+    entso  = dlt.read("silver.entso_generation")
+    gopacs = dlt.read("silver.gopacs_congestion_events")   # registered for lineage
 
-    # Build hourly price + generation join
+    _ = gopacs   # Phase 4 Risk Agent does per-contract delivery-point matching
+
     price_gen = (
         epex
         .join(
@@ -46,7 +42,6 @@ def compute_market_risk_signals():
         )
     )
 
-    # Classify signal type and severity per hour
     classified = price_gen.withColumn(
         "signal_type",
         F.when(F.col("is_negative"), F.lit("negative_price"))
@@ -55,20 +50,15 @@ def compute_market_risk_signals():
     ).withColumn(
         "severity",
         F.when(F.col("price_eur_mwh") < -100, F.lit("CRITICAL"))
-         .when(F.col("price_eur_mwh") < -30, F.lit("HIGH"))
-         .when(F.col("price_eur_mwh") < 0, F.lit("MEDIUM"))
-         .when(F.col("oversupply_flag"), F.lit("LOW"))
+         .when(F.col("price_eur_mwh") < -30,  F.lit("HIGH"))
+         .when(F.col("price_eur_mwh") < 0,    F.lit("MEDIUM"))
+         .when(F.col("oversupply_flag"),       F.lit("LOW"))
          .otherwise(F.lit("NONE")),
     )
 
-    # gopacs is read to register it as a lineage dependency so DLT tracks the source.
-    # The actual per-delivery-point temporal join is implemented in Phase 4
-    # by the Risk Scoring Agent, which matches GOPACS zones to PPA delivery points.
-    # Placeholder: mark all hours as False — Phase 4 overwrites via MERGE INTO.
-    _ = gopacs  # keep lineage dependency; suppress unused-variable warning
-
     return (
         classified
+        # Phase 4: Risk Agent sets this per-contract via MERGE INTO
         .withColumn("gopacs_congestion_active", F.lit(False))
         .withColumn(
             "details",
@@ -80,19 +70,11 @@ def compute_market_risk_signals():
             ))
         )
         .select(
-            "delivery_ts",
-            "delivery_date",
-            "hour",
-            "market",
-            "price_eur_mwh",
-            "is_negative",
-            "renewable_pct",
-            "oversupply_flag",
-            "wind_onshore_mw",
-            "wind_offshore_mw",
-            "solar_mw",
-            "signal_type",
-            "severity",
+            "delivery_ts", "delivery_date", "hour", "market",
+            "price_eur_mwh", "is_negative",
+            "renewable_pct", "oversupply_flag",
+            "wind_onshore_mw", "wind_offshore_mw", "solar_mw",
+            "signal_type", "severity",
             "gopacs_congestion_active",
             "details",
         )
@@ -102,7 +84,7 @@ def compute_market_risk_signals():
 # ── hourly_price_features ─────────────────────────────────────────────────────
 
 @dlt.table(
-    name="hourly_price_features",
+    name="gold.hourly_price_features",
     comment=(
         "Feature-engineered price table: rolling averages, volatility, "
         "spread vs previous day. Used by Risk Scoring Agent for exposure calculations."
@@ -110,37 +92,26 @@ def compute_market_risk_signals():
     table_properties={"quality": "gold"},
 )
 def compute_price_features():
-    epex = dlt.read("epex_dayahead")
+    epex = dlt.read("silver.epex_dayahead")
 
-    # Rolling window: 24h (same-day context), 168h (7-day average)
-    w24 = Window.partitionBy("market").orderBy(F.unix_timestamp("delivery_ts")).rowsBetween(-23, 0)
+    w24  = Window.partitionBy("market").orderBy(F.unix_timestamp("delivery_ts")).rowsBetween(-23, 0)
     w168 = Window.partitionBy("market").orderBy(F.unix_timestamp("delivery_ts")).rowsBetween(-167, 0)
 
     return (
         epex
-        .withColumn("rolling_avg_24h", F.avg("price_eur_mwh").over(w24))
-        .withColumn("rolling_avg_7d", F.avg("price_eur_mwh").over(w168))
+        .withColumn("rolling_avg_24h",    F.avg("price_eur_mwh").over(w24))
+        .withColumn("rolling_avg_7d",     F.avg("price_eur_mwh").over(w168))
         .withColumn("rolling_stddev_24h", F.stddev("price_eur_mwh").over(w24))
-        .withColumn(
-            "price_vs_7d_avg",
-            F.col("price_eur_mwh") - F.col("rolling_avg_7d"),
-        )
+        .withColumn("price_vs_7d_avg",    F.col("price_eur_mwh") - F.col("rolling_avg_7d"))
         .withColumn(
             "volatility_flag",
             F.abs(F.col("price_vs_7d_avg")) > (2 * F.col("rolling_stddev_24h")),
         )
         .select(
-            "delivery_ts",
-            "delivery_date",
-            "hour",
-            "market",
-            "price_eur_mwh",
-            "is_negative",
-            "rolling_avg_24h",
-            "rolling_avg_7d",
-            "rolling_stddev_24h",
-            "price_vs_7d_avg",
-            "volatility_flag",
+            "delivery_ts", "delivery_date", "hour", "market",
+            "price_eur_mwh", "is_negative",
+            "rolling_avg_24h", "rolling_avg_7d", "rolling_stddev_24h",
+            "price_vs_7d_avg", "volatility_flag",
         )
     )
 
@@ -148,16 +119,15 @@ def compute_price_features():
 # ── portfolio_exposure_daily ──────────────────────────────────────────────────
 
 @dlt.table(
-    name="portfolio_exposure_daily",
+    name="gold.portfolio_exposure_daily",
     comment=(
         "Daily aggregated negative price exposure per market. "
-        "Populated further in Phase 4 when contract data joins here. "
-        "Phase 2: market-level exposure only (no per-contract breakdown yet)."
+        "Phase 4 adds per-contract breakdown when contract data joins here."
     ),
     table_properties={"quality": "gold"},
 )
 def compute_portfolio_exposure():
-    signals = dlt.read("market_risk_signals")
+    signals = dlt.read("gold.market_risk_signals")
 
     return (
         signals
@@ -176,23 +146,18 @@ def compute_portfolio_exposure():
 # ── agent_feedback ────────────────────────────────────────────────────────────
 
 @dlt.table(
-    name="agent_feedback",
+    name="gold.agent_feedback",
     comment="User feedback on agent responses — thumbs up/down + optional comment",
     table_properties={"quality": "gold"},
 )
 def init_feedback_table():
-    """
-    Feedback rows are written directly by the FastAPI layer (Phase 5).
-    This DLT stub creates the table in Unity Catalog with the right schema.
-    Actual rows flow in via MERGE INTO from the API, not from Bronze streaming.
-    """
     from pyspark.sql.types import StructType, StructField, StringType, BooleanType, TimestampType
     schema = StructType([
-        StructField("session_id", StringType()),
-        StructField("query", StringType()),
-        StructField("response_summary", StringType()),
-        StructField("thumbs_up", BooleanType()),
-        StructField("comment", StringType()),
-        StructField("created_at", TimestampType()),
+        StructField("session_id",        StringType()),
+        StructField("query",             StringType()),
+        StructField("response_summary",  StringType()),
+        StructField("thumbs_up",         BooleanType()),
+        StructField("comment",           StringType()),
+        StructField("created_at",        TimestampType()),
     ])
     return spark.createDataFrame([], schema)

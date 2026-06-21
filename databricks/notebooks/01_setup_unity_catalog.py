@@ -233,6 +233,10 @@ queries = {
         "SELECT COUNT(*), COUNT(DISTINCT dso_zone) as zones FROM renewiq.silver.gopacs_congestion_events",
     "Gold market signals":
         "SELECT signal_type, severity, COUNT(*) as hours FROM renewiq.gold.market_risk_signals GROUP BY 1,2 ORDER BY 1,2",
+    "Gold portfolio exposure (negative days)":
+        "SELECT COUNT(*) as neg_days, ROUND(AVG(negative_hours),1) as avg_neg_hrs FROM renewiq.gold.portfolio_exposure_daily",
+    "Gold price features (volatility)":
+        "SELECT COUNT(*) as rows, COUNT(CASE WHEN volatility_flag THEN 1 END) as volatile_hours FROM renewiq.gold.hourly_price_features",
 }
 
 for label, sql in queries.items():
