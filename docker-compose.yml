@@ -1,0 +1,67 @@
+version: "3.9"
+
+services:
+
+  # ── FastAPI gateway ──────────────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: docker/api/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - LLM_BACKEND=${LLM_BACKEND:-ollama}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - OLLAMA_LLM_MODEL=${OLLAMA_LLM_MODEL:-llama3.1:8b}
+      - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-nomic-embed-text}
+      - DATABRICKS_HOST=${DATABRICKS_HOST}
+      - DATABRICKS_TOKEN=${DATABRICKS_TOKEN}
+      - DATABRICKS_SERVING_ENDPOINT=${DATABRICKS_SERVING_ENDPOINT:-renewiq-agent-endpoint}
+      - REDIS_URL=redis://redis:6379
+      - USE_MOCK_ENDPOINT=${USE_MOCK_ENDPOINT:-false}
+      - API_KEY=${API_KEY:-dev-secret}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./src:/app/src          # hot-reload during dev
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # reach Ollama on host (Linux)
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # ── Redis (market data cache) ─────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --save ""
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+
+  # ── Mock Databricks endpoint (offline dev + CI) ───────────────────────────────
+  mock-databricks:
+    build:
+      context: .
+      dockerfile: docker/mock/Dockerfile
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./tests/fixtures:/app/fixtures
+    profiles:
+      - offline    # start with: docker compose --profile offline up
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8001/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3

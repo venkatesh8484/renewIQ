@@ -1,0 +1,6 @@
+apiVersion: v2
+name: renewiq-api
+description: RenewIQ FastAPI gateway — thin proxy to Databricks Model Serving
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

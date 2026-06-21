@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-typecheck:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dev dependencies
+        run: |
+          pip install --upgrade pip
+          pip install ruff mypy
+
+      - name: Ruff lint
+        run: ruff check src/ tests/
+
+      - name: Ruff format check
+        run: ruff format --check src/ tests/
+
+      - name: Mypy type check
+        run: mypy src/ --ignore-missing-imports
+
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: lint-and-typecheck
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -e ".[dev]"
+          # Install API-only deps without heavy Databricks/Spark packages
+          pip install fastapi uvicorn pydantic pydantic-settings httpx python-dotenv
+
+      - name: Run unit tests
+        run: pytest tests/unit/ -m "not integration" -v --tb=short
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: htmlcov/
+
+  docker-build:
+    name: Docker Build Check
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build API image
+        run: docker build -f docker/api/Dockerfile -t renewiq-api:ci .
+
+      - name: Build mock image
+        run: docker build -f docker/mock/Dockerfile -t renewiq-mock:ci .
+
+      - name: Smoke test — health endpoint
+        run: |
+          docker run -d --name renewiq-ci \
+            -p 8000:8000 \
+            -e LLM_BACKEND=ollama \
+            -e USE_MOCK_ENDPOINT=false \
+            -e API_KEY=ci-test \
+            -e REDIS_URL=redis://localhost:6379 \
+            renewiq-api:ci
+          sleep 8
+          curl --fail --retry 5 --retry-delay 2 http://localhost:8000/health
+          docker stop renewiq-ci
+
+  # ── RAGAS eval gate (runs after agent is wired in Phase 4+) ──────────────────
+  # Uncomment once evaluation dataset and agent are in place
+  # ragas-eval:
+  #   name: RAGAS Quality Gate
+  #   runs-on: ubuntu-latest
+  #   needs: unit-tests
+  #   if: github.ref == 'refs/heads/main'
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: Run RAGAS evaluation
+  #       env:
+  #         DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+  #         DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+  #       run: |
+  #         pip install -e ".[eval]"
+  #         python tests/evaluation/ragas_eval.py --fail-below 0.85

@@ -1,0 +1,113 @@
+name: CD
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+env:
+  ACR_REGISTRY: renewiqacr.azurecr.io
+  IMAGE_NAME: renewiq-api
+  AKS_RESOURCE_GROUP: rg-renewiq
+  AKS_CLUSTER: aks-renewiq
+  HELM_RELEASE: renewiq
+  HELM_NAMESPACE: renewiq
+
+jobs:
+  build-and-push:
+    name: Build & Push to ACR
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: ACR login
+        run: az acr login --name renewiqacr
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.ACR_REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=
+            type=semver,pattern={{version}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/api/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=registry,ref=${{ env.ACR_REGISTRY }}/${{ env.IMAGE_NAME }}:cache
+          cache-to: type=registry,ref=${{ env.ACR_REGISTRY }}/${{ env.IMAGE_NAME }}:cache,mode=max
+
+  deploy-to-aks:
+    name: Deploy to AKS (Helm)
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Set AKS context
+        run: |
+          az aks get-credentials \
+            --resource-group ${{ env.AKS_RESOURCE_GROUP }} \
+            --name ${{ env.AKS_CLUSTER }} \
+            --overwrite-existing
+
+      - name: Create namespace
+        run: kubectl create namespace ${{ env.HELM_NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Create / update Kubernetes secret
+        run: |
+          kubectl create secret generic renewiq-secrets \
+            --from-literal=databricks-host=${{ secrets.DATABRICKS_HOST }} \
+            --from-literal=databricks-token=${{ secrets.DATABRICKS_TOKEN }} \
+            --namespace ${{ env.HELM_NAMESPACE }} \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Helm upgrade / install
+        run: |
+          helm upgrade --install ${{ env.HELM_RELEASE }} infra/helm/renewiq-api/ \
+            --namespace ${{ env.HELM_NAMESPACE }} \
+            --set image.tag=${{ needs.build-and-push.outputs.image-tag }} \
+            --set image.repository=${{ env.ACR_REGISTRY }}/${{ env.IMAGE_NAME }} \
+            --wait \
+            --timeout 5m
+
+      - name: Verify deployment
+        run: |
+          kubectl rollout status deployment/${{ env.HELM_RELEASE }}-api \
+            --namespace ${{ env.HELM_NAMESPACE }} \
+            --timeout=3m
+
+  # ── Databricks Asset Bundle deploy (Phase 5+) ────────────────────────────────
+  # deploy-databricks:
+  #   name: Deploy Databricks Bundle
+  #   runs-on: ubuntu-latest
+  #   needs: build-and-push
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: Install Databricks CLI
+  #       run: pip install databricks-cli
+  #     - name: Deploy bundle
+  #       env:
+  #         DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+  #         DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+  #       run: databricks bundle deploy --target prod
