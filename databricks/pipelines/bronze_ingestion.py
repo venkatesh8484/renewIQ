@@ -43,7 +43,7 @@ def ingest_epex_raw():
         .option("cloudFiles.inferColumnTypes", "true")
         .load(f"{STORAGE_ROOT}/epex/")
         .withColumn("ingestion_ts", F.current_timestamp())
-        .withColumn("_source_file", F.input_file_name())
+        .withColumn("_source_file", F.col("_metadata.file_path"))
     )
 
 
@@ -63,7 +63,7 @@ def ingest_entso_raw():
         .option("cloudFiles.inferColumnTypes", "true")
         .load(f"{STORAGE_ROOT}/entso_generation/")
         .withColumn("ingestion_ts", F.current_timestamp())
-        .withColumn("_source_file", F.input_file_name())
+        .withColumn("_source_file", F.col("_metadata.file_path"))
     )
 
 
@@ -83,7 +83,7 @@ def ingest_gopacs_raw():
         .option("cloudFiles.inferColumnTypes", "true")
         .load(f"{STORAGE_ROOT}/gopacs/")
         .withColumn("ingestion_ts", F.current_timestamp())
-        .withColumn("_source_file", F.input_file_name())
+        .withColumn("_source_file", F.col("_metadata.file_path"))
     )
 
 
@@ -96,7 +96,7 @@ def ingest_gopacs_raw():
 )
 def ingest_ppa_docs():
     """
-    Auto Loader monitors the ADLS contracts container for new PDF uploads.
+    Auto Loader monitors the UC Volume contracts folder for new PDF uploads.
     Stores file metadata only — actual content extracted by Silver pipeline.
     """
     return (
@@ -111,10 +111,10 @@ def ingest_ppa_docs():
             )
         )
         .select(
-            F.col("path"),
+            F.col("_metadata.file_path").alias("path"),
             F.col("modificationTime").alias("last_modified"),
             F.col("length").alias("file_size_bytes"),
-            F.regexp_extract(F.col("path"), r"([^/]+)\.pdf$", 1).alias("contract_id"),
+            F.regexp_extract(F.col("_metadata.file_path"), r"([^/]+)\.pdf$", 1).alias("contract_id"),
             F.current_timestamp().alias("ingestion_ts"),
         )
     )
