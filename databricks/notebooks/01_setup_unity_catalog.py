@@ -195,9 +195,9 @@ pipeline_config = {
         "renewiq.storage_root": VOLUME_PATH,
     },
     "libraries": [
-        {"notebook": {"path": f"{pipeline_base}/bronze_ingestion"}},
-        {"notebook": {"path": f"{pipeline_base}/silver_transforms"}},
-        {"notebook": {"path": f"{pipeline_base}/gold_features"}},
+        {"file": {"path": f"{pipeline_base}/bronze_ingestion.py"}},
+        {"file": {"path": f"{pipeline_base}/silver_transforms.py"}},
+        {"file": {"path": f"{pipeline_base}/gold_features.py"}},
     ],
     "continuous": False,
     "development": True,
