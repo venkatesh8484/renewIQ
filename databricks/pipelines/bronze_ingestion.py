@@ -11,9 +11,12 @@ import dlt
 from pyspark.sql import functions as F
 from pyspark.sql.types import StringType, TimestampType, DateType, LongType
 
-# ── Storage paths (set in Databricks pipeline config) ────────────────────────
-STORAGE_ROOT = spark.conf.get("renewiq.storage_root",
-    "abfss://raw@renewiqstorage.dfs.core.windows.net")
+# ── Storage paths ─────────────────────────────────────────────────────────────
+# Dev: Unity Catalog Volume (works when DBFS root is disabled — UC-enforced workspaces)
+#   /Volumes/<catalog>/<schema>/<volume>/
+# Prod override: set renewiq.storage_root in pipeline config to your ADLS path
+#   e.g. abfss://raw@<storage_account>.dfs.core.windows.net
+STORAGE_ROOT = spark.conf.get("renewiq.storage_root", "/Volumes/renewiq/bronze/raw_data")
 
 
 # ── EPEX Day-Ahead Prices ─────────────────────────────────────────────────────
@@ -101,7 +104,12 @@ def ingest_ppa_docs():
         .format("cloudFiles")
         .option("cloudFiles.format", "binaryFile")
         .option("cloudFiles.schemaLocation", f"{STORAGE_ROOT}/_schemas/ppa_docs")
-        .load(f"abfss://contracts@renewiqstorage.dfs.core.windows.net/ppa/")
+        .load(
+            spark.conf.get(
+                "renewiq.contracts_root",
+                "/Volumes/renewiq/bronze/raw_data/contracts"
+            )
+        )
         .select(
             F.col("path"),
             F.col("modificationTime").alias("last_modified"),
