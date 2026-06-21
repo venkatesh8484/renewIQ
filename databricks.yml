@@ -1,0 +1,52 @@
+# Databricks Asset Bundle — RenewIQ
+# docs: https://docs.databricks.com/dev-tools/bundles/index.html
+
+bundle:
+  name: renewiq
+
+variables:
+  databricks_host:
+    description: Databricks workspace URL
+    default: ${env.DATABRICKS_HOST}
+
+workspace:
+  host: ${var.databricks_host}
+  root_path: /Shared/renewiq/.bundle/${bundle.target}
+
+artifacts:
+  renewiq_whl:
+    type: whl
+    build: pip wheel . -w dist/
+    files:
+      - source: dist/*.whl
+
+resources:
+  jobs:
+    renewiq-deploy-agent:
+      name: renewiq-deploy-agent
+      tasks:
+        - task_key: deploy_agent
+          notebook_task:
+            notebook_path: /Repos/venkatesh8484@gmail.com/renewIQ/databricks/notebooks/04_deploy_agent
+            base_parameters:
+              env: ${bundle.target}
+          new_cluster:
+            spark_version: "15.4.x-cpu-ml-scala2.12"
+            node_type_id: Standard_DS3_v2
+            num_workers: 1
+            spark_env_vars:
+              RENEWIQ_USE_MOCK_ENDPOINT: "false"
+
+targets:
+  dev:
+    mode: development
+    default: true
+    variables:
+      databricks_host: ${env.DATABRICKS_HOST}
+
+  prod:
+    mode: production
+    variables:
+      databricks_host: ${env.DATABRICKS_HOST}
+    workspace:
+      root_path: /Shared/renewiq/.bundle/prod

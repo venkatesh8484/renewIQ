@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.config import settings
+from src.api.middleware.cache import RedisCacheMiddleware
 from src.api.routes import chat, contracts, reports
 
 logging.basicConfig(level=settings.log_level)
@@ -36,6 +37,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Redis cache — gracefully no-ops if Redis is unavailable
+app.add_middleware(RedisCacheMiddleware, redis_url=settings.redis_url)
 
 # Routers
 app.include_router(chat.router, prefix="/chat", tags=["chat"])

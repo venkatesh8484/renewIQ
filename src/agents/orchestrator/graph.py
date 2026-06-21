@@ -30,6 +30,16 @@ from typing import Literal
 
 from langgraph.graph import StateGraph, START, END
 
+# MLflow autolog — captures LangGraph traces, latencies, and inputs/outputs
+# No-ops gracefully when MLflow tracking is not configured (local dev / CI)
+try:
+    import mlflow
+    import mlflow.langchain
+    mlflow.langchain.autolog(log_models=False, log_input_examples=False)
+    _MLFLOW_AVAILABLE = True
+except Exception:
+    _MLFLOW_AVAILABLE = False
+
 from src.agents.orchestrator.state import AgentState
 import src.agents.market_data.agent     as market_data_agent
 import src.agents.contract_rag.agent    as contract_rag_agent
