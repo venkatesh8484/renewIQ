@@ -168,14 +168,23 @@ print(f"\nSeed complete ✓")
 
 # COMMAND ----------
 
-# DBTITLE 1,Create Lakeflow DLT pipeline via SDK
-from databricks.sdk import WorkspaceClient
+# DBTITLE 1,Create Lakeflow DLT pipeline via REST API
+# Using REST API directly — avoids databricks-sdk dict serialisation issues
+import requests
 
-w = WorkspaceClient()
+# Grab token and host from the running notebook context (no secrets needed)
+ctx = dbutils.notebook.entry_point.getDbutils().notebook().getContext()
+token = ctx.apiToken().get()
+host  = ctx.apiUrl().get()
 
-# Get current user's Repo path
-current_user = w.current_user.me().user_name
-repo_base = f"/Repos/{current_user}/renewIQ/databricks/pipelines"
+# Derive pipeline notebooks path from this notebook's location
+notebook_path = ctx.notebookPath().get()
+# notebook_path = /Repos/user@email.com/renewIQ/databricks/notebooks/01_setup_unity_catalog
+repo_root = "/".join(notebook_path.split("/")[:5])   # /Repos/user@email.com/renewIQ
+pipeline_base = f"{repo_root}/databricks/pipelines"
+
+print(f"Repo root detected: {repo_root}")
+print(f"Pipeline notebooks: {pipeline_base}")
 
 pipeline_config = {
     "name": "renewiq_data_pipeline",
@@ -185,31 +194,33 @@ pipeline_config = {
         {
             "label": "default",
             "num_workers": 1,
-                    "spark_conf": {
+            "spark_conf": {
                 "renewiq.storage_root": VOLUME_PATH,
             },
         }
     ],
     "libraries": [
-        {"notebook": {"path": f"{repo_base}/bronze_ingestion"}},
-        {"notebook": {"path": f"{repo_base}/silver_transforms"}},
-        {"notebook": {"path": f"{repo_base}/gold_features"}},
+        {"notebook": {"path": f"{pipeline_base}/bronze_ingestion"}},
+        {"notebook": {"path": f"{pipeline_base}/silver_transforms"}},
+        {"notebook": {"path": f"{pipeline_base}/gold_features"}},
     ],
     "continuous": False,
     "development": True,
 }
 
-try:
-    pipeline = w.pipelines.create(**pipeline_config)
-    print(f"✓ Pipeline created: ID = {pipeline.pipeline_id}")
-    print(f"  Notebooks: {repo_base}/bronze_ingestion|silver_transforms|gold_features")
+headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+resp = requests.post(f"{host}/api/2.0/pipelines", json=pipeline_config, headers=headers)
+
+if resp.status_code == 200:
+    pipeline_id = resp.json().get("pipeline_id")
+    print(f"\n✓ Pipeline created: ID = {pipeline_id}")
     print(f"  Storage: {VOLUME_PATH}")
-    print(f"\n→ Start it: Workflows → Delta Live Tables → renewiq_data_pipeline → Start")
-except Exception as e:
-    if "already exists" in str(e).lower():
-        print("Pipeline already exists — find it under Workflows → Delta Live Tables")
-    else:
-        print(f"Error: {e}")
+    print(f"\n→ Go to: Workflows → Delta Live Tables → renewiq_data_pipeline → Start")
+elif resp.status_code == 400 and "already exists" in resp.text.lower():
+    print("Pipeline 'renewiq_data_pipeline' already exists.")
+    print("→ Find it under: Workflows → Delta Live Tables")
+else:
+    print(f"Error {resp.status_code}: {resp.text}")
 
 # COMMAND ----------
 
