@@ -123,7 +123,7 @@ for day, group in df_epex.groupby("delivery_date"):
         "market": "NL",
         "fetch_date": str(day),
         "ingestion_ts": str(date.today()),
-        "raw_payload": group.drop(columns=["delivery_date"]).to_json(orient="records"),
+        "raw_payload": group.drop(columns=["delivery_date"]).to_json(orient="records", date_format="iso"),
     })
     dbutils.fs.put(f"{VOLUME_PATH}/epex/{day}.json", payload, overwrite=True)
     epex_count += 1

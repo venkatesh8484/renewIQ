@@ -28,8 +28,8 @@ def compute_market_risk_signals():
     a single market stress signal per hour. Agents query this table to answer
     'what is the market context right now?' without touching raw sources.
     """
-    epex = dlt.read("epex_dayahead")
-    entso = dlt.read("entso_generation")
+    epex   = dlt.read("epex_dayahead")
+    entso  = dlt.read("entso_generation")
     gopacs = dlt.read("gopacs_congestion_events")
 
     # Build hourly price + generation join
@@ -61,30 +61,20 @@ def compute_market_risk_signals():
          .otherwise(F.lit("NONE")),
     )
 
-    # Add a flag if any active GOPACS congestion overlaps this hour
-    # (approximate join — exact delivery-point matching done by Risk Scoring Agent)
-    active_gopacs_hours = (
+    # Count active GOPACS congestion events as a scalar flag per hour.
+    # Phase 4 (Risk Scoring Agent) does the exact delivery-point spatial match;
+    # here we track whether ANY zone had congestion in the pipeline run.
+    active_gopacs_count = (
         gopacs
         .filter(F.col("status") == "active")
-        .select(
-            F.col("start_time"),
-            F.col("end_time"),
-            F.col("dso_zone"),
-            F.col("mw_needed"),
-        )
-        .withColumn("has_congestion", F.lit(True))
+        .agg(F.count("*").alias("n"))
+        .collect()[0]["n"]
     )
+    gopacs_active = active_gopacs_count > 0
 
     return (
         classified
-        .withColumn(
-            "gopacs_congestion_active",
-            F.exists(
-                F.array(F.struct(F.lit(True).alias("v"))),
-                lambda x: x.v,   # placeholder — real spatial join in Risk Agent
-            ),
-        )
-        .drop("gopacs_congestion_active")   # recomputed below with actual check
+        .withColumn("gopacs_congestion_active", F.lit(gopacs_active))
         .withColumn(
             "details",
             F.to_json(F.struct(
@@ -108,6 +98,7 @@ def compute_market_risk_signals():
             "solar_mw",
             "signal_type",
             "severity",
+            "gopacs_congestion_active",
             "details",
         )
     )
