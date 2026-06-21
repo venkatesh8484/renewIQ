@@ -85,19 +85,41 @@ jobs:
           curl --fail --retry 5 --retry-delay 2 http://localhost:8000/health
           docker stop renewiq-ci
 
-  # ── RAGAS eval gate (runs after agent is wired in Phase 4+) ──────────────────
-  # Uncomment once evaluation dataset and agent are in place
-  # ragas-eval:
-  #   name: RAGAS Quality Gate
-  #   runs-on: ubuntu-latest
-  #   needs: unit-tests
-  #   if: github.ref == 'refs/heads/main'
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - name: Run RAGAS evaluation
-  #       env:
-  #         DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
-  #         DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
-  #       run: |
-  #         pip install -e ".[eval]"
-  #         python tests/evaluation/ragas_eval.py --fail-below 0.85
+  # ── RAGAS quality gate ────────────────────────────────────────────────────────
+  # Runs on main-branch pushes only (not PRs) to avoid burning LLM credits on drafts.
+  # Blocks merge if faithfulness < 0.85, answer_relevancy < 0.85, context_precision < 0.80.
+  ragas-eval:
+    name: RAGAS Quality Gate
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install eval dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -e ".[dev]"
+          pip install fastapi uvicorn pydantic pydantic-settings httpx python-dotenv
+          pip install ragas[all] datasets
+
+      - name: Run RAGAS evaluation (local graph, mock mode)
+        env:
+          RENEWIQ_USE_MOCK_ENDPOINT: "true"
+          RENEWIQ_RERANKER_IDENTITY: "true"
+        run: |
+          python tests/evaluation/ragas_eval.py \
+            --fail-below 0.85 \
+            --output ragas_results.json \
+            --max-samples 20
+
+      - name: Upload RAGAS results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ragas-results
+          path: ragas_results.json

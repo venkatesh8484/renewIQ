@@ -1,0 +1,182 @@
+[
+  {
+    "id": "eval-001",
+    "question": "Does the Zeeland wind PPA have a negative price floor clause?",
+    "expected_clause_ids": ["7.2"],
+    "expected_risk_category": "price_risk",
+    "expected_severity": "HIGH",
+    "context": "zeeland-wind-physical-ppa-v1",
+    "ground_truth": "No. Clause 7.2 of the Zeeland wind PPA explicitly states that no price floor shall apply and the Seller shall pay the Buyer when settlement prices are negative."
+  },
+  {
+    "id": "eval-002",
+    "question": "What is the curtailment compensation clause in the Zeeland PPA?",
+    "expected_clause_ids": ["9.3"],
+    "expected_risk_category": "curtailment_risk",
+    "expected_severity": "MEDIUM",
+    "context": "zeeland-wind-physical-ppa-v1",
+    "ground_truth": "Clause 9.3 states that no compensation shall be payable for curtailment events. The Seller accepts full curtailment risk without deemed output provisions."
+  },
+  {
+    "id": "eval-003",
+    "question": "Which contracts have no negative price protection?",
+    "expected_clause_ids": ["7.2", "8.1"],
+    "expected_risk_category": "price_risk",
+    "expected_severity": "HIGH",
+    "context": null,
+    "ground_truth": "The Zeeland wind PPA (Clause 7.2) and Nordsee offshore PPA (Clause 8.1) both lack negative price floor provisions."
+  },
+  {
+    "id": "eval-004",
+    "question": "What is our EUR exposure if EPEX NL has 200 negative price hours at -30 EUR/MWh?",
+    "expected_clause_ids": ["7.2"],
+    "expected_risk_category": "price_risk",
+    "expected_severity": "HIGH",
+    "context": "zeeland-wind-physical-ppa-v1",
+    "ground_truth": "For a 10MW contract with no floor, annualised exposure = 200 * (365/90) * 10 * 30 = approximately EUR 243,333 per year."
+  },
+  {
+    "id": "eval-005",
+    "question": "Does the Nordsee offshore PPA have a price floor?",
+    "expected_clause_ids": ["7.1"],
+    "expected_risk_category": "price_risk",
+    "expected_severity": "LOW",
+    "context": "nordsee-offshore-ppa-v2",
+    "ground_truth": "Yes. Clause 7.1 of the Nordsee PPA states the settlement price shall not fall below zero EUR/MWh. The floor applies and protects against negative price settlement."
+  },
+  {
+    "id": "eval-006",
+    "question": "What take-or-pay obligations exist in the Zeeland PPA?",
+    "expected_clause_ids": ["12.1"],
+    "expected_risk_category": "volume_risk",
+    "expected_severity": "MEDIUM",
+    "context": "zeeland-wind-physical-ppa-v1",
+    "ground_truth": "Clause 12.1 imposes minimum annual volume obligations. The Seller must deliver at least 80% of contracted output or compensate the Buyer at the contract strike price."
+  },
+  {
+    "id": "eval-007",
+    "question": "What credit support is required under the virtual PPA?",
+    "expected_clause_ids": ["15.3"],
+    "expected_risk_category": "counterparty_risk",
+    "expected_severity": "MEDIUM",
+    "context": "hanze-virtual-ppa-v1",
+    "ground_truth": "Clause 15.3 requires the Buyer to maintain a minimum credit rating of BBB or provide a letter of credit equal to 3 months of expected settlement payments."
+  },
+  {
+    "id": "eval-008",
+    "question": "How is basis risk handled in the sleeved PPA?",
+    "expected_clause_ids": ["6.4"],
+    "expected_risk_category": "basis_risk",
+    "expected_severity": "LOW",
+    "context": "groningen-sleeved-ppa-v1",
+    "ground_truth": "Clause 6.4 defines basis risk as the difference between the hub price (TTF) and the local delivery point price. Basis risk is borne entirely by the Seller under this agreement."
+  },
+  {
+    "id": "eval-009",
+    "question": "What happens if GOPACS issues a curtailment order during negative prices?",
+    "expected_clause_ids": ["9.3", "7.2"],
+    "expected_risk_category": "curtailment_risk",
+    "expected_severity": "HIGH",
+    "context": "zeeland-wind-physical-ppa-v1",
+    "ground_truth": "Under Clause 9.3, no curtailment compensation applies. Combined with the negative price exposure in Clause 7.2, a GOPACS curtailment during negative price hours creates a HIGH severity double exposure."
+  },
+  {
+    "id": "eval-010",
+    "question": "What is the termination clause for regulatory changes?",
+    "expected_clause_ids": ["20.2"],
+    "expected_risk_category": "legal_regulatory",
+    "expected_severity": "LOW",
+    "context": "zeeland-wind-physical-ppa-v1",
+    "ground_truth": "Clause 20.2 allows either party to terminate the agreement with 90 days notice if a material change in law or regulation renders the contract economically unviable."
+  },
+  {
+    "id": "eval-011",
+    "question": "Which PPA has the highest negative price risk exposure?",
+    "expected_clause_ids": ["7.2"],
+    "expected_risk_category": "price_risk",
+    "expected_severity": "HIGH",
+    "context": null,
+    "ground_truth": "The Zeeland wind PPA has the highest negative price risk. It has no floor clause (Clause 7.2) and is exposed to the full magnitude of negative settlement prices."
+  },
+  {
+    "id": "eval-012",
+    "question": "Does the imbalance settlement clause expose us to intraday risk?",
+    "expected_clause_ids": ["11.1"],
+    "expected_risk_category": "basis_risk",
+    "expected_severity": "LOW",
+    "context": "zeeland-wind-physical-ppa-v1",
+    "ground_truth": "Clause 11.1 specifies that imbalance settlements use the Dutch BRP (Balance Responsible Party) imbalance price, which can deviate significantly from the day-ahead price."
+  },
+  {
+    "id": "eval-013",
+    "question": "What force majeure provisions protect against grid failure?",
+    "expected_clause_ids": ["18.1"],
+    "expected_risk_category": "legal_regulatory",
+    "expected_severity": "LOW",
+    "context": "nordsee-offshore-ppa-v2",
+    "ground_truth": "Clause 18.1 defines force majeure to include grid failure, acts of government, and extreme weather. During force majeure, delivery obligations are suspended without penalty."
+  },
+  {
+    "id": "eval-014",
+    "question": "How is the strike price indexed in the Zeeland PPA?",
+    "expected_clause_ids": ["5.1"],
+    "expected_risk_category": "price_risk",
+    "expected_severity": "MEDIUM",
+    "context": "zeeland-wind-physical-ppa-v1",
+    "ground_truth": "Clause 5.1 sets a fixed strike price of EUR 52.50/MWh for the initial 5-year term, with annual CPI indexation of up to 2% thereafter."
+  },
+  {
+    "id": "eval-015",
+    "question": "What is the deemed output provision if curtailment occurs due to grid congestion?",
+    "expected_clause_ids": ["9.3"],
+    "expected_risk_category": "curtailment_risk",
+    "expected_severity": "HIGH",
+    "context": "zeeland-wind-physical-ppa-v1",
+    "ground_truth": "Clause 9.3 explicitly states there is no deemed output calculation for curtailment. Unlike the Nordsee PPA, no compensation is payable regardless of whether the curtailment was operator-ordered."
+  },
+  {
+    "id": "eval-016",
+    "question": "What negative price provisions does the Hanze virtual PPA contain?",
+    "expected_clause_ids": ["8.2"],
+    "expected_risk_category": "price_risk",
+    "expected_severity": "HIGH",
+    "context": "hanze-virtual-ppa-v1",
+    "ground_truth": "Clause 8.2 of the Hanze virtual PPA states the contract-for-difference settlement applies even when the floating price is negative, creating an unlimited downside for the generator."
+  },
+  {
+    "id": "eval-017",
+    "question": "Are there any change-of-control provisions in our PPAs?",
+    "expected_clause_ids": ["21.4"],
+    "expected_risk_category": "counterparty_risk",
+    "expected_severity": "MEDIUM",
+    "context": null,
+    "ground_truth": "Clause 21.4 (Zeeland PPA) requires prior written consent from both parties for assignment or change of control. Breach entitles the non-consenting party to terminate within 30 days."
+  },
+  {
+    "id": "eval-018",
+    "question": "What is the meter reading and settlement frequency?",
+    "expected_clause_ids": ["10.1"],
+    "expected_risk_category": "volume_risk",
+    "expected_severity": "MEDIUM",
+    "context": "zeeland-wind-physical-ppa-v1",
+    "ground_truth": "Clause 10.1 specifies hourly metered settlement using TSO-verified production data. Provisional invoices are issued monthly; final reconciliation occurs within 60 days."
+  },
+  {
+    "id": "eval-019",
+    "question": "Does curtailment risk increase when renewable penetration exceeds 70%?",
+    "expected_clause_ids": ["9.3"],
+    "expected_risk_category": "curtailment_risk",
+    "expected_severity": "HIGH",
+    "context": "zeeland-wind-physical-ppa-v1",
+    "ground_truth": "Yes. GOPACS data shows curtailment orders are issued when renewable generation exceeds 70% of NL demand. Combined with Clause 9.3 (no compensation), exposure is HIGH when renewable_pct > 0.70."
+  },
+  {
+    "id": "eval-020",
+    "question": "What is the recommended action for a Zeeland PPA with 168 negative price hours?",
+    "expected_clause_ids": ["7.2", "9.3"],
+    "expected_risk_category": "price_risk",
+    "expected_severity": "HIGH",
+    "context": "zeeland-wind-physical-ppa-v1",
+    "ground_truth": "With 168 negative price hours (avg -28.7 EUR/MWh) and no floor in Clause 7.2, estimated exposure is EUR 184,836/year. Recommended action: renegotiate Clause 7.2 to add a zero-floor, or overlay with a financial PPA to cap downside."
+  }
+]
