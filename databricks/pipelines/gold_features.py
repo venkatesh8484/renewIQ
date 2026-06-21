@@ -61,20 +61,15 @@ def compute_market_risk_signals():
          .otherwise(F.lit("NONE")),
     )
 
-    # Count active GOPACS congestion events as a scalar flag per hour.
-    # Phase 4 (Risk Scoring Agent) does the exact delivery-point spatial match;
-    # here we track whether ANY zone had congestion in the pipeline run.
-    active_gopacs_count = (
-        gopacs
-        .filter(F.col("status") == "active")
-        .agg(F.count("*").alias("n"))
-        .collect()[0]["n"]
-    )
-    gopacs_active = active_gopacs_count > 0
+    # gopacs is read to register it as a lineage dependency so DLT tracks the source.
+    # The actual per-delivery-point temporal join is implemented in Phase 4
+    # by the Risk Scoring Agent, which matches GOPACS zones to PPA delivery points.
+    # Placeholder: mark all hours as False — Phase 4 overwrites via MERGE INTO.
+    _ = gopacs  # keep lineage dependency; suppress unused-variable warning
 
     return (
         classified
-        .withColumn("gopacs_congestion_active", F.lit(gopacs_active))
+        .withColumn("gopacs_congestion_active", F.lit(False))
         .withColumn(
             "details",
             F.to_json(F.struct(
